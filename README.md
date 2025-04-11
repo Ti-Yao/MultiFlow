@@ -1,6 +1,6 @@
 # MultiFlow: A unified deep learning framework for multi-vessel classification, segmentation and phenomapping of phase-contrast MRI validated on a multi-site single ventricle patient cohort 
 
-This repository presents a deep learning pipeline for fully automated segmentation and downstream analysis of velocity-encoded phase-contrast magnetic resonance (PCMR) images. The primary application is within **Fontan circulation patients**, leveraging data from the **FORCE Registry**, but the methods are generalizable to other cardiovascular conditions.
+This repository presents a deep learning pipeline for fully automated segmentation and downstream analysis of velocity-encoded phase-contrast magnetic resonance (PCMR) images. The primary application is within Fontan circulation patients, leveraging data from the FORCE Registry, but the methods are generalizable to other cardiovascular conditions.
 
 **Tina Yao, Nicole St. Clair et al.** MultiFlow: A unified deep learning framework for multi-vessel classification, segmentation and clustering of phase-contrast MRI validated on a multi-site single ventricle patient cohort
  [[preprint]](https://arxiv.org/abs/2502.11993) [1]
