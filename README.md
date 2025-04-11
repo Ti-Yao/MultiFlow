@@ -26,34 +26,26 @@ These data are then analyzed using **Deep Temporal Clustering (DTC)** to uncover
 3. **Extract time-varying flow curves** and perform unsupervised phenomapping using Deep Temporal Clustering (MultiFlowDTC).
 4. **Correlate clusters with outcomes** like liver disease, and transplant/mortality.
 
-
 ## MultiFlowSeg Architecture
-
-<img src="img/MultiFlowSeg.png" width="600">
-
-
-*Figure 1: Model architecture for multi-vessel segmentation and classification.*
-
+<div style="text-align: center;">
+  <img src="img/MultiFlowSeg.png" width="600">
+  <p><em>Figure 1: Model architecture for multi-vessel segmentation and classification.</em></p>
+</div>
 
 ## Segmentation & Derived Flow Curves
-
-<img src="img/segmentation.gif" width="600">
-
-*Figure 2: Example of segmentation results and derived time-varying flow curves for key vessels.*
-
+<div style="text-align: center;">
+  <img src="img/segmentation.gif" width="600">
+  <p><em>Figure 2: Example of segmentation results and derived time-varying flow curves for key vessels.</em></p>
+</div>
 
 ## MultiFlowDTC Architecture
-
-<img src="img/MultiFlowDTC.png" width="600">
-
-
-*Figure 3: Model architecture for unsupervised clustering of flow curves.*
-
+<div style="text-align: center;">
+  <img src="img/MultiFlowDTC.png" width="600">
+  <p><em>Figure 3: Model architecture for unsupervised clustering of flow curves.</em></p>
+</div>
 
 ## Clusters and Phenomapping
-
-<img src="img/clusters.png" width="600">
-
-*Figure 4: Clustered flow curves and associated phenomapping outcomes.*
-
-
+<div style="text-align: center;">
+  <img src="img/clusters.png" width="600">
+  <p><em>Figure 4: Clustered flow curves and associated phenomapping outcomes.</em></p>
+</div>
