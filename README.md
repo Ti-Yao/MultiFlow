@@ -21,8 +21,8 @@ These data are then analyzed using **Deep Temporal Clustering (DTC)** to uncover
 
 ## Project Goals
 
-1. **Develop a single DL model** capable of classifying and segmenting multiple vessel types from PCMR slices.
-2. **Build a scalable, automated pipeline** for segmenting the entire FORCE registry.
+1. **Develop a unified DL model** capable of classifying and segmenting multiple vessel types from PCMR slices (MultiFlowSeg).
+2. **Build a scalable, automated pipeline** for segmenting the entire FORCE registry of >5000 CMR exams (Pipeline).
 3. **Extract time-varying flow curves** and perform unsupervised phenomapping using Deep Temporal Clustering (MultiFlowDTC).
 4. **Correlate clusters with outcomes** like liver disease, and transplant/mortality.
 
