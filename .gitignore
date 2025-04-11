@@ -12,7 +12,6 @@ training/models
 *npy
 *dcm
 *jpg
-*gif
 *data
 *h5
 volumentations
