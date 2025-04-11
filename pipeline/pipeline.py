@@ -1,10 +1,12 @@
-from utils import *
+import sys
+sys.path.append('..')
+from multiflowseg_utils import *
 
 data_path = '/workspaces/storage/Flow/test_set500'
-patients = [pat.split('/')[-1].replace('.gif','') for pat in glob.glob(f'/workspaces/storage/Flow/old_pipeline/segs/FLOW-3/v1 dec_05/*')]
+patients = [pat for pat in glob.glob(f'{data_path}/*')]
 
 model_name = 'FLOW-3'
-version = 'v4_jan_14'
+version = 'v5'
 results_path = f'/workspaces/storage/Flow/pipeline'
 
 
@@ -630,24 +632,21 @@ else:
                                'vessel', 'probability', 'dict_label', 'flow',
                                'total_volume', 'forward_volume', 'backward_volume', 'flow_curve'])
     
+
 model_name = 'FLOW-3'
 model_path = '../training/models/FLOW-3.h5'
 
 
-for patient in tqdm(patients[:5]):
-    # if patient not in sv_df.patient.unique():
-    try:
-        print(patient)
-        p = Flow_Pipeline(patient,data_path, model_path)
+for patient in tqdm(patients[:]):
+    print(patient)
+    p = Flow_Pipeline(patient,data_path, model_path)
 
-        df = p.predicted_df[['venc', 'rr', 'description', 'mag_series_uid', 'phase_series_uid',
-                            'vessel', 'probability', 'dict_label', 'flow',
-                            'total_volume', 'forward_volume', 'backward_volume','flow_curve']]
-        df['patient'] = patient
-        sv_df = pd.concat([sv_df, df])
-        sv_df = sv_df.drop_duplicates(subset = ['patient','vessel'], keep = 'last')
-        sv_df.to_csv(csv_file, index = False)
-        sv_df = pd.read_csv(csv_file)
-        del p
-    except Exception as e:
-        print(patient, e)
+    df = p.predicted_df[['venc', 'rr', 'description', 'mag_series_uid', 'phase_series_uid',
+                        'vessel', 'probability', 'dict_label', 'flow',
+                        'total_volume', 'forward_volume', 'backward_volume','flow_curve']]
+    df['patient'] = patient
+    sv_df = pd.concat([sv_df, df])
+    sv_df = sv_df.drop_duplicates(subset = ['patient','vessel'], keep = 'last')
+    sv_df.to_csv(csv_file, index = False)
+    sv_df = pd.read_csv(csv_file)
+    del p

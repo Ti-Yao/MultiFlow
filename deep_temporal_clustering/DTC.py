@@ -18,10 +18,7 @@ from keras.callbacks import ModelCheckpoint
 # DTC components
 from TSClusteringLayer import TSClusteringLayer
 from TAE import *
-import tsdistances
 import numpy as np
-
-from neptune.new.integrations.tensorflow_keras import NeptuneCallback
 
 class DTC:
     """
@@ -42,12 +39,11 @@ class DTC:
 
     """
 
-    def __init__(self, n_clusters, input_dim, timesteps, run, model_name,vessel_pair, tae_version,
+    def __init__(self, n_clusters, input_dim, timesteps, model_name,vessel_pair, tae_version,
                  n_filters=50, kernel_size=10, strides=1, pool_size=8, n_units=[50, 1], 
                  alpha=1.0, dist_metric='eucl', cluster_init='kmeans', heatmap=False):
         assert(timesteps % pool_size == 0)
         self.n_clusters = n_clusters
-        self.run = run
         self.model_name = model_name
         self.vessel_pair = vessel_pair
         self.input_dim = input_dim
@@ -264,7 +260,7 @@ class DTC:
         """
         return self.heatmap_model.predict(x, verbose=0)
 
-    def pretrain(self, X, run,
+    def pretrain(self, X, 
                  optimizer='adam',
                  epochs=10,
                  batch_size=64,
@@ -284,7 +280,6 @@ class DTC:
             save_dir: path to existing directory where weights will be saved
         """
         print('Pretraining...')
-        neptune_callback = NeptuneCallback(run=run) 
         
         mc = ModelCheckpoint(f'models/{model_name}_ae.h5',
                         save_best_only= True,
@@ -299,8 +294,7 @@ class DTC:
                              batch_size=batch_size, 
                              epochs=epochs, 
                              verbose=verbose, 
-                             callbacks=[neptune_callback, mc])
-        run[f'models/{model_name}_ae'].upload(f'models/{model_name}_ae.h5')
+                             callbacks=[mc])
 
         print('Pretraining time: ', time() - t0)
         self.pretrained = True
@@ -358,21 +352,12 @@ class DTC:
                 print('epoch {}'.format(epoch))
                 loss = self.model.evaluate(X_train, [X_train, p], batch_size=batch_size, verbose=False)
                 L, Lr, Lc = loss
-                self.run['train/loss'].append(L)
-                self.run['train/loss_reconstruction'].append(Lr)
-                self.run['train/loss_cluster'].append(Lc)
 
                 if L<loss_min:
                     loss_min = L
                     self.model.save_weights(f'{save_dir}/{self.model_name}_{self.vessel_pair}.h5')
                     print('Saved model to:',f'{save_dir}/{self.model_name}_{self.vessel_pair}.h5')
-                    self.run[f'{self.model_name}_{self.vessel_pair}'].upload(f'{save_dir}/{self.model_name}_{self.vessel_pair}.h5')
                
-                # if Lr<loss_recon_min and epoch > 50:
-                #     loss_recon_min = Lr
-                #     patience_cnt = 0
-                #     print(f'Reconstruction Loss Reduced. Min reconstruction loss = {loss_recon_min:.4f}. Patience: {patience_cnt}/{patience}')
-
                 print(f'[Train] - Lr={Lr:f}, Lc={Lc:f} - total loss={L:f}')
 
                 if y_pred_last is not None:
@@ -390,7 +375,6 @@ class DTC:
                         print('Reached max patience. Stopping training.')
                         self.model.save_weights(f'{save_dir}/{self.model_name}_{self.vessel_pair}.h5')
                         print('Saved model to:',f'{save_dir}/{self.model_name}_{self.vessel_pair}.h5')
-                        self.run[f'{self.model_name}_{self.vessel_pair}'].upload(f'{save_dir}/{self.model_name}_{self.vessel_pair}.h5')
                         break
                     
                 else:

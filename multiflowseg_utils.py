@@ -1,51 +1,41 @@
-# Standard library imports
-import os
-import sys
-import math
-import random
 import json
-import warnings
-import glob
+import math
+import os
+import random
 import re
-from pathlib import Path
+import sys
+import warnings
+from glob import glob
 from itertools import chain
+from pathlib import Path
 
-# Third-party libraries
+import matplotlib.animation as animation
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from matplotlib.colors import ListedColormap
+from matplotlib.ticker import FuncFormatter
 import numpy as np
 import pandas as pd
 import pydicom
 import seaborn as sns
-import matplotlib.pyplot as plt
-import matplotlib.animation as animation
-import matplotlib.patches as mpatches
-from matplotlib.colors import ListedColormap
-from matplotlib.ticker import FuncFormatter
-from tqdm import tqdm
+import skimage
 from scipy import ndimage, stats
-from scipy.ndimage import zoom, center_of_mass
-from scipy.integrate import simpson
 from scipy.interpolate import CubicSpline
+from scipy.integrate import simpson
+from scipy.ndimage import center_of_mass, zoom
 from sklearn.model_selection import train_test_split
-
-# TensorFlow & Keras
 import tensorflow as tf
 import tensorflow.keras.backend as K
-from tensorflow.keras.layers import Layer, Add, Activation
+from tensorflow.keras.layers import Activation, Add, Layer
+from tqdm import tqdm
+from keras.callbacks import EarlyStopping, ModelCheckpoint
 
-# Neptune for experiment tracking
-import neptune.new as neptune
-from neptune.new.integrations.tensorflow_keras import NeptuneCallback
-
-# External libraries
-import skimage
+from tensorflow.keras.layers import (
+    Input, Dense, BatchNormalization, LeakyReLU, SpatialDropout3D,
+    Activation, GlobalMaxPooling3D, concatenate, Reshape, Lambda
+)
+from tensorflow.keras.optimizers import Adam
 import volumentations as V
-
-
-random.seed(42)
-np.random.seed(42)
-tf.random.set_seed(42)
-
-warnings.filterwarnings('ignore')
 
 
 
@@ -76,7 +66,7 @@ colormaps = {vessel:colormaps[vessel] for vessel in vessels}
 
 data_dictionary = {
     'lpa': ['lpa', 'l pa', 'lt ', 'left'],
-    'rpa': ['rpa', 'r pa', 'rt ','right'],
+    'rpa': ['rpa', 'r pa', 'rt ', 'right'],
     'ivc': ['ivc', 'dao', 'inferior', 'fontan', 'font','inf '],
     'svc': ['svc', 'rsvc', 'lsvc', 'sup', 'superior', 'glenn', 'vfc', 'bdg'],
     'ao': ['aorta', 'ao', 'aor', 'asc', 'aso', 'neo', 'aa', 'aao', 'native', 'aov', 'av ', 'qs', 'stj', 'dks'],
@@ -91,164 +81,20 @@ description_match_dict = {'lpa':['lpa'],
                           'ao':['asc','aa','aao','ao','neo','stj','dks']}
 
 
-def description_one_hot(description):
-    if description == '': # if description is empty
-        label = ''
-        one_hot_input = tf.one_hot(0, 6)[np.newaxis] 
 
-    else:
-        description = description.replace('_',' ').replace('.',' ').replace('x','').replace('  ',' ').split(' ')
-        print(description)
-        labels = is_token_a_substring_in_dictionary(data_dictionary, description) 
-        if len(labels) == 0:
-            label = 0
-        else:
-            labels = pd.Series(labels)
-            if (labels == 'other').any():
-                label = 'other'
-            else:
-                label = labels.value_counts().index[0]
+def convert_time_to_minutes(time_str):
+    '''
+    Converts a time string in the format HHMMSS.FFFFFF into minutes.
+    '''
+    # Parse the time components
+    time_str = time_str.split('.')[0]
+    hours = int(time_str[:2])
+    minutes = int(time_str[2:4])
+    seconds = int(time_str[4:6])
     
-    one_hot = vessels_dict[label] if label in vessels_dict.keys() else 0 # tunable input 
-    one_hot_input = tf.one_hot(one_hot, 6)[np.newaxis] 
-    return one_hot_input
-    
-def inference(model,mag_image, phase_image, patient, venc_df, vessel, series_description_df, type):
-    vessel_index = vessels_dict[vessel]
-    mag_image[mag_image<1e-10] = 0                
-    max_val = np.max(phase_image)
-
-    venc = venc_df.loc[(venc_df['patient'] == patient) & (venc_df['vessel'] == vessel)].venc.values[0]
-    angles = phase2angle(phase_image, venc)
-    mag_image = (mag_image - np.min(mag_image))/(np.max(mag_image))
-    mag_image[mag_image>=1] = 1
-
-    mag_image = skimage.exposure.equalize_adapthist(mag_image)
-    complex_image = create_complex_image(mag_image, angles)
-    real_image, imaginary_image = complex_image[...,0],complex_image[...,1]
-    mag_image = normalise(mag_image)        
-    imaginary_image = normalise(imaginary_image)        
-
-    X = np.stack([mag_image, imaginary_image], -1).astype('float32')[np.newaxis]
-    y = np.zeros((image_size, image_size, 32, 6), dtype='uint8')[np.newaxis] # dummy input
-
-    cgm_input = tf.zeros((6))[np.newaxis] 
-
-    if type == 'empty':
-        description = ''
-        one_hot_input = description_one_hot(description)    
-
-    if type == 'actual':
-        description = series_description_df.loc[patient,vessel].seriesdescription[0]
-        one_hot_input = description_one_hot(description)    
-
-    if type == 'random':
-        array = np.arange(0, 6)
-        array = np.delete(array, vessel_index)
-        array = np.delete(array, 0)
-        random_val = random.choice(array)
-        one_hot_input =  tf.one_hot(random_val, 6)[np.newaxis] 
-
-    if type == 'vanilla':
-        y_pred = model.predict({'image_input':X, 'cgm_input': cgm_input,'mask_input': y})[-1][0]
-        print(y_pred.shape)
-        pred_label = vessels_dict_r[np.argmax(np.sum(y_pred, axis=(0, 1, 2))[1:]) + 1]
-
-    else:
-        print(one_hot_input)
-        y_pred, probability = model.predict({'image_input':X, 'cgm_input': cgm_input,'one_hot_input':one_hot_input,'mask_input': y})
-        pred_label = vessels_dict_r[np.argmax(probability)]
-        y_pred = y_pred[-1][0]
-
-    y_pred = get_one_hot(np.argmax(y_pred,axis = -1), 6).astype('uint8')
-    y_pred = clean_channels(y_pred)
-
-    return y_pred, pred_label
-
-
-
-# def plot_gif(mag_image, true_mask, dice_val, vessel, y_pred, patient):
-#     fig, axs = plt.subplots(1,2, figsize = (9,5))
-#     fig.suptitle(f'Dice = {dice_val:.2f}')
-
-#     frames = []
-#     for i in range(mag_image.shape[-1]):
-#         p1 = axs[0].imshow(mag_image[...,i],cmap = 'gray', vmin = np.min(mag_image), vmax = np.max(mag_image))
-#         p2 = axs[1].imshow(mag_image[...,i],cmap = 'gray', vmin = np.min(mag_image), vmax = np.max(mag_image))
-#         p4 = axs[1].imshow(true_mask[...,i],alpha = true_mask[...,i] * 0.7, cmap = colormaps[vessel])
-#         text = axs[0].text(0,-5,f'Time = {i}')
-
-#         artists = [p1, p2, p4, text]
-#         for j, label in enumerate(list(colormaps.keys())[1:]):
-#             cmap = colormaps[label]
-#             if np.sum(y_pred[..., j+1]) > 0:
-#                 artists.append(axs[0].imshow(y_pred[..., i, j+1],alpha = y_pred[..., i, j+1] * 0.7, cmap=cmap))
-#         frames.append(artists)
-#         legend_patches = [mpatches.Patch(color=plt.cm.get_cmap(colormaps[label])(0.5), label=label) for label in colormaps.keys()]
-#         fig.legend(handles=legend_patches, loc='lower center', ncol=5, fontsize='large', bbox_to_anchor=(0.5, 0))
-#     fig.tight_layout()
-#     plt.subplots_adjust(hspace=0.5, bottom=0.1)
-#     ani = animation.ArtistAnimation(fig, frames)
-
-
-#     Path(f'results/{model_name}/{vessel}').mkdir(parents=True, exist_ok=True)
-#     ani.save(f'results/{model_name}/{vessel}/{patient}.gif', fps=mag_image.shape[0]/2)
-# #             run[f'results/{cohort}/{patient}/{vessel}'].upload(f'results/{model_name}/{vessel}/{patient}.gif')
-#     plt.close()
-
-def single_dice(im1, im2):
-    """
-    Computes the Dice coefficient, a measure of set similarity.
-    Parameters
-    ----------
-    im1 : array-like, bool
-        Any array of arbitrary size. If not boolean, will be converted.
-    im2 : array-like, bool
-        Any other array of identical size. If not boolean, will be converted.
-    Returns
-    -------
-    dice : float
-        Dice coefficient as a float on range [0,1].
-        Maximum similarity = 1
-        No similarity = 0
-        
-    Notes
-    -----
-    The order of inputs for `dice` is irrelevant. The result will be
-    identical if `im1` and `im2` are switched.
-    """
-    im1 = np.asarray(im1).astype(bool)
-    im2 = np.asarray(im2).astype(bool)
-
-    if im1.shape != im2.shape:
-        raise ValueError("Shape mismatch: im1 and im2 must have the same shape.")
-    if im1.sum() + im2.sum() == 0:
-        return 1.0  # If both arrays are empty, they are identical
-    
-
-    # Compute Dice coefficient
-    intersection = np.logical_and(im1, im2)
-
-    return 2. * intersection.sum() / (im1.sum() + im2.sum())
-
-def get_model(inference_model_name):
-    # model =  tf.keras.models.load_model(f'models/{inference_model_name}.h5', compile = False)
-    model_path = f'models/{inference_model_name}.h5'
-    model =  tf.keras.models.load_model(model_path, compile = False) # segmentation part
-
-    # Identify the classification layer
-    classification_layer = None
-    for layer in model.layers:
-        if layer.name == "tf.nn.softmax":  
-            classification_layer = layer.output # classification part
-            break
-
-    # Create a single model that outputs both segmentation and classification
-    model = tf.keras.Model(inputs=model.inputs, outputs=[model.output, classification_layer])
-    return model
-
-
-
+    # Calculate total time in minutes
+    total_minutes = hours * 60 + minutes + seconds / 60 
+    return round(total_minutes)
 
 def is_token_a_substring_in_dictionary(data_dictionary, description):
     """
@@ -278,10 +124,7 @@ def phase2angle(value, venc, to_range=(-np.pi, np.pi)):
     mapped_value = (value - from_min) * (to_max - to_min) / (from_max - from_min) + to_min
     return mapped_value
 
-def create_complex_image(magnitude, phase): # magnitude is a real number tensor; phase is a tensor of radiant angles
-#     if np.max(phase) > (np.pi+1e-2) or np.min(phase) < -(np.pi+1e-2):
-#         print('Not right about phase')
-    # Calculate real and imaginary parts
+def create_complex_image(magnitude, phase):
     real_part = magnitude * np.cos(phase)
     imag_part = magnitude * np.sin(phase)
     
@@ -308,6 +151,23 @@ def interpolate_curve(curve, phase_vessel_rr):
     x_original = np.linspace(0, round(phase_vessel_rr), len(curve))
     y_original = curve
     cs = CubicSpline(x_original, y_original)
+def get_volumentation(image_size, frames, vessel):
+    transforms = [V.RandomBrightnessContrast(p  = 0.5), 
+                  V.Flip(axis = 1, p = 0.4),
+                  V.Rotate((0, 0), (0, 0), (-45, 45), p=0.5),
+                  ]
+    crop_val = random.randint(25,50)
+    pad_factor = random.randint(0,20)
+
+    if random.random()< 0.5:
+        transforms.append(V.PadIfNeeded(shape = (image_size + pad_factor,image_size + pad_factor, frames), p =0.3))
+    else:    
+        transforms.append(V.CenterCrop(shape = (image_size- crop_val,image_size - crop_val, frames), p = 0.3))
+        
+    transforms.extend([
+    V.Resize(shape = (image_size,image_size, frames), p = 1)
+    ])
+    return V.Compose(transforms, p=1.0)
     x_new = np.arange(0, round(phase_vessel_rr))
     return cs(x_new)
 
