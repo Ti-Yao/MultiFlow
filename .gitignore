@@ -1,8 +1,6 @@
 *iter*
-*results*
 *redcap*
 *force*
-data
 *pkl*
 __pycache__
 pipeline/results
@@ -12,7 +10,6 @@ training/models
 *npy
 *dcm
 *jpg
-*data
 *h5
 volumentations
 *pkl
