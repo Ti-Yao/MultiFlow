@@ -254,7 +254,7 @@ class Flow_Pipeline:
             groups = list(stack_df.groupby(stack_df['venc'] == 0))
             if len(groups) == 2:
                 phase_df, mag_df = [g[1] for g in groups]
-                if len(phase_df) == len(mag_df) * 2 and self.manufacturer == 'siemens':
+                if len(phase_df) == len(mag_df) * 2 and 'siemens' in self.manufacturer:
                     print('complex magnitude siemens')
                     _, phase_df = [x for _ , x in stack_df.groupby(stack_df.image.apply(lambda x: x.min()< 0))]
 
